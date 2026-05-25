@@ -21,10 +21,15 @@ Episode number rules:
   * If Episode only → (year-1).(episode-1).
   * Else fallback to date → YYYY-1.MMDD-1.  (e.g., 2025-09-12 → 2024.0911.)
 - onscreen and common both two-digit (S01E03) when S & E present.
+
+v2.2.0 additions:
+- Proxy support via ZAP2XML_PROXY_LIST env var (JSON array or comma-separated list)
+  Supports HTTP/Squid and SOCKS5 proxies with round-robin rotation.
 """
 
 import argparse
 import datetime as _dt
+import json
 import os
 import random
 import re
@@ -34,6 +39,48 @@ from pathlib import Path
 # === v2.1.0 additions ===
 # Simple display-name rewrite based on callSign -> station_name mapping (DB lookup by callSign only).
 import sqlite3, atexit, signal, contextlib, fcntl, shutil
+
+# Proxy support - can be set via ZAP2XML_PROXY_LIST env var
+# Format: JSON array of proxy URLs, e.g., ["http://proxy1:port", "socks5://proxy2:port"]
+def _get_proxies():
+    proxy_list = os.environ.get('ZAP2XML_PROXY_LIST', '')
+    if not proxy_list:
+        return None
+    try:
+        # Try parsing as JSON array first
+        proxies = json.loads(proxy_list)
+        if isinstance(proxies, list):
+            proxies = [p.strip() for p in proxies if p.strip()]
+            return proxies if proxies else None
+    except (json.JSONDecodeError, ValueError):
+        pass
+    # Fallback to comma-separated string
+    proxies = [p.strip() for p in proxy_list.split(',') if p.strip()]
+    return proxies if proxies else None
+
+def _get_proxy_session(proxies=None):
+    """Create a session with proxy support. Rotates through proxies if list provided."""
+    sess = requests.Session()
+    if proxies and len(proxies) > 0:
+        # Round-robin proxy selection
+        proxy_idx = getattr(_get_proxy_session, '_idx', 0)
+        proxy = proxies[proxy_idx % len(proxies)]
+        setattr(_get_proxy_session, '_idx', proxy_idx + 1)
+        
+        # Determine proxy type
+        if proxy.lower().startswith('socks5'):
+            sess.proxies = {
+                'http': proxy,
+                'https': proxy,
+            }
+        else:
+            # HTTP/HTTPS proxy
+            sess.proxies = {
+                'http': proxy,
+                'https': proxy,
+            }
+        print(f"[zap2xml] Using proxy: {proxy}", flush=True)
+    return sess
 
 def _load_callsign_to_stationname():
     lut = {}
@@ -338,7 +385,9 @@ def fetch_grid(
     total_hours = int(timespan)
     chunk_hours = 6
 
-    sess = requests.Session()
+    # Get proxies from environment
+    proxies = _get_proxies()
+    sess = _get_proxy_session(proxies)
     try:
         print('[zap2xml] warm-up GET https://tvlistings.gracenote.com/', flush=True)
         _wr = sess.get('https://tvlistings.gracenote.com/', headers={'User-Agent': _ua()}, timeout=20)

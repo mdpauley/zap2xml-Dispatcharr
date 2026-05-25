@@ -33,7 +33,7 @@ import time
 from pathlib import Path
 # === v2.1.0 additions ===
 # Simple display-name rewrite based on callSign -> station_name mapping (DB lookup by callSign only).
-import sqlite3, atexit, signal, contextlib, fcntl
+import sqlite3, atexit, signal, contextlib, fcntl, shutil
 
 def _load_callsign_to_stationname():
     lut = {}
@@ -126,7 +126,7 @@ _LOCK_FILE = "/data/plugins/zap2xml.run.lock"
 def _release_locks_v210():
     try:
         if os.path.isdir(_LOCK_DIR):
-            os.rmdir(_LOCK_DIR)
+            shutil.rmtree(_LOCK_DIR)
     except Exception:
         pass
     try:

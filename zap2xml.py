@@ -58,6 +58,23 @@ def _get_proxies():
     proxies = [p.strip() for p in proxy_list.split(',') if p.strip()]
     return proxies if proxies else None
 
+def _log_proxies(proxies):
+    """Log all proxies being used on startup."""
+    if not proxies:
+        print("[zap2xml] No proxies configured", flush=True)
+        return
+    print(f"[zap2xml] Proxy list ({len(proxies)} proxy/ies):", flush=True)
+    for i, proxy in enumerate(proxies, 1):
+        # Mask credentials if present
+        if '@' in proxy:
+            parts = proxy.split('@')
+            scheme = parts[0]
+            creds = parts[1].split(':')[0] if ':' in parts[1] else 'user'
+            masked = f"{scheme}://{creds}:***@{parts[1].split('@')[1]}" if len(parts) > 1 else proxy
+            print(f"  [{i}] {masked}", flush=True)
+        else:
+            print(f"  [{i}] {proxy}", flush=True)
+
 def _get_proxy_session(proxies=None):
     """Create a session with proxy support. Rotates through proxies if list provided."""
     sess = requests.Session()
@@ -385,8 +402,9 @@ def fetch_grid(
     total_hours = int(timespan)
     chunk_hours = 6
 
-    # Get proxies from environment
+    # Get proxies from environment and log them
     proxies = _get_proxies()
+    _log_proxies(proxies)
     sess = _get_proxy_session(proxies)
     try:
         print('[zap2xml] warm-up GET https://tvlistings.gracenote.com/', flush=True)

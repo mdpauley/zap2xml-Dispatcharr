@@ -37,7 +37,7 @@ DEFAULT_UA = (
 
 class Plugin:
     name = "Zap2XML"
-    version = "2.1.4"
+    version = "2.2.0"
     description = "Create an XMLTV EPG from Zap2it (single or multiple lineups)."
 
     # Settings rendered by UI
